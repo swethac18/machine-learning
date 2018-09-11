@@ -1,1 +1,1 @@
-# machine-learning
+# CMPE257_ML Coursework Assignments
