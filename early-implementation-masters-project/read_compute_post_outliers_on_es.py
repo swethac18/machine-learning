@@ -1,7 +1,5 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-from pylab import savefig
 from sklearn.ensemble import IsolationForest
 import sys
 from elasticsearch import Elasticsearch
@@ -12,6 +10,11 @@ import logging
 ## run elastic search at localhost:9200
 ## sample command
 ## python3.6 read_compute_post_outliers_on_es.py metrics --@timestamp net_conntrack_listener_conn_accepted_total 2 anomaly
+## python version 3.6 and above
+## arg 1 : name of the index on elastic search that contains documents. In this example:  metrics
+## arg 2 : the field using which the documents are sorted in the response from Elastic Search. In this example : @timestamp
+## arg 3 : number of test samples (the last n samples on which anomaly detection should be run) In this example it is 2
+## arg 4 : name of the index in which the predictions are stored
 def search(es_object, index_name, document,search):
     res = es_object.search(index=index_name,  body=search)
     return res
@@ -49,11 +52,10 @@ if __name__ == '__main__':
   index_name = sys.argv[1] ## name of the index from which the metric documents are read
   ## we issue a query to index to retrieve documents from the index sorted by this sortkey (ex: @timeStamp)
   sort_key = sys.argv[2] ## sorty key could be time stamp name of the field in which the response should be sorted
-  metric_key = sys.argv[3] ## metric to be analyzed for isolation forest
   ## metrics that we need to analyze for isolation forest
-  test_samples = int(sys.argv[4]) 
+  test_samples = int(sys.argv[3]) 
   ## number of samples on which we need to test for anomaly. Rest of the samples will be used for training
-  anomalies_index = sys.argv[5]
+  anomalies_index = sys.argv[4]
   sort_key = sort_key.replace('--','').strip()
   
   if es is not None:
@@ -77,12 +79,13 @@ if __name__ == '__main__':
           metrics[key] = []
         metrics[key].append(captured_metrics[key])
 
-    if (len(metrics[metric_key]) != len(sort_key_list)):
-      raise "time stamps collected != metric sample list"
-
     for metric_key in metrics:
       print ("computing outliers for " + metric_key)
       input()
+      if (len(metrics[metric_key]) != len(sort_key_list)):
+        raise "time stamps collected != metric sample list"
+
+
       compute_outliers(metrics, metric_key, test_samples, sort_key_list, es)
 
 
