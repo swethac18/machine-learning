@@ -61,13 +61,13 @@ def connect_elasticsearch():
     else:
         print('Could not connect to Elastic Search')
     return _es
-def compute_outliers(metrics, test_metrics,  metric_key, test_samples, sort_key_list, es):
+def compute_outliers(metrics, test_metrics,  metric_key, sort_key_list, es):
   train = metrics[metric_key]# [:-test_samples]
   test = test_metrics[metric_key]#[-test_samples:]
 #print ("length of train:" + str(len(train))) 
 # print ("length of metrics:" + str(len(metrics[metric_key]))) 
 # print ("length of test:" + str(len(test))) 
-  test_time_stamps = sort_key_list[-test_samples:]
+  test_time_stamps = sort_key_list
   
   X_train = pd.DataFrame(train, columns = ['sample'])
   X_test = pd.DataFrame(test, columns=['sample'])
@@ -83,7 +83,7 @@ def compute_outliers(metrics, test_metrics,  metric_key, test_samples, sort_key_
 
 if __name__ == '__main__':
   #es = connect_elasticsearch()
-  es = elasticsearch.Elasticsearch(['https://e88c64e7d90e4ecaba68d3830ac8ba85.us-central1.gcp.cloud.es.io:9243/'], http_auth=('elastic', '5qOa6DEOxDHepgGUSYvM3zpT'),use_ssl=True, ca_certs=certifi.where())
+  es = elasticsearch.Elasticsearch(['https://'+ os.environ['HOSTNAME'] +':' + os.environ['PORT']+ '/'], http_auth=(os.environ['USER'], os.environ['PASSWORD']),use_ssl=True, ca_certs=certifi.where())
 #if es.ping():
 #   print ("Successfully connected to Elastic Search")
 #   populateIndexes(es, 'metrics', '')
@@ -93,7 +93,7 @@ if __name__ == '__main__':
   ## we issue a query to index to retrieve documents from the index sorted by this sortkey (ex: @timeStamp)
   sort_key = '@timestamp' #sys.argv[2] ## sorty key could be time stamp name of the field in which the response should be sorted
   ## metrics that we need to analyze for isolation forest
-  test_samples = int(sys.argv[3]) 
+#test_samples = int(sys.argv[3]) 
   training_start_timestamp = os.environ['train_start_time']
   training_end_timestamp = os.environ['train_end_time']
 
@@ -102,7 +102,7 @@ if __name__ == '__main__':
 ###
 
   ## number of samples on which we need to test for anomaly. Rest of the samples will be used for training
-  anomalies_index = sys.argv[4]
+  anomalies_index = os.environ['results_index'] #sys.argv[4]
   sort_key = sort_key.replace('--','').strip()
   
   if es is not None:
@@ -151,7 +151,6 @@ if __name__ == '__main__':
       if (len(metrics[metric_key]) != len(sort_key_list)):
         raise "time stamps collected != metric sample list"
 
-      print ("Test samples:"+str(test_samples)) 
-      compute_outliers(metrics, test_metrics,  metric_key, test_samples, sort_key_list, es)
+      compute_outliers(metrics, test_metrics,  metric_key, test_sort_key_list, es)
 
 
