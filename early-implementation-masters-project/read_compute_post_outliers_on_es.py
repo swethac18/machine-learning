@@ -61,9 +61,9 @@ def connect_elasticsearch():
     else:
         print('Could not connect to Elastic Search')
     return _es
-def compute_outliers(metrics, metric_key, test_samples, sort_key_list, es):
-  train = metrics[metric_key][:-test_samples]
-  test = metrics[metric_key][-test_samples:]
+def compute_outliers(metrics, test_metrics,  metric_key, test_samples, sort_key_list, es):
+  train = metrics[metric_key]# [:-test_samples]
+  test = test_metrics[metric_key]#[-test_samples:]
 #print ("length of train:" + str(len(train))) 
 # print ("length of metrics:" + str(len(metrics[metric_key]))) 
 # print ("length of test:" + str(len(test))) 
@@ -72,7 +72,7 @@ def compute_outliers(metrics, metric_key, test_samples, sort_key_list, es):
   X_train = pd.DataFrame(train, columns = ['sample'])
   X_test = pd.DataFrame(test, columns=['sample'])
  
-  clf = IsolationForest(max_samples=10000)
+  clf = IsolationForest(max_samples=1000)
   clf.fit(X_train)
   outliers = clf.predict(X_test)
   
@@ -89,19 +89,26 @@ if __name__ == '__main__':
 #   populateIndexes(es, 'metrics', '')
   logging.basicConfig(level=logging.ERROR)
 
-  index_name = sys.argv[1] ## name of the index from which the metric documents are read
+  index_name = os.environ['index'] # sys.argv[1] ## name of the index from which the metric documents are read
   ## we issue a query to index to retrieve documents from the index sorted by this sortkey (ex: @timeStamp)
-  sort_key = sys.argv[2] ## sorty key could be time stamp name of the field in which the response should be sorted
+  sort_key = '@timestamp' #sys.argv[2] ## sorty key could be time stamp name of the field in which the response should be sorted
   ## metrics that we need to analyze for isolation forest
   test_samples = int(sys.argv[3]) 
+  training_start_timestamp = os.environ['train_start_time']
+  training_end_timestamp = os.environ['train_end_time']
+
+  test_start_time_stamp = os.environ['test_start_time']
+  test_end_time_stamp = os.environ['test_end_time']
+###
+
   ## number of samples on which we need to test for anomaly. Rest of the samples will be used for training
   anomalies_index = sys.argv[4]
   sort_key = sort_key.replace('--','').strip()
   
   if es is not None:
  
-    search_object = '{"sort" : [{"' + str(sort_key) + '" : {"order" : "asc"}}],"from" : 0, "size" : 10000}'
-    
+    #search_object = '{"sort" : [{"' + str(sort_key) + '" : {"order" : "asc"}}],"from" : 0, "size" : 10000}'
+    search_object = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + training_start_timestamp + '", "lte": "'+ training_end_timestamp + '" } }}}'
     response= es.search(index=str(index_name),body=search_object)
     metrics = {}
     sort_key_list = []
@@ -118,6 +125,25 @@ if __name__ == '__main__':
         if key not in metrics:
           metrics[key] = []
         metrics[key].append(captured_metrics[key])
+    
+    search_object = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + test_start_time_stamp + '", "lte": "'+ test_end_time_stamp + '" } }}}'
+    test_response= es.search(index=str(index_name),body=search_object)
+    test_metrics = {}
+    test_sort_key_list = []
+
+    ## The response contains a field called hits which in turn has another field called hits
+    ## extract the hits
+    allhits = test_response["hits"]["hits"]
+    for hit in allhits: #response["hits"]["hits"]:
+      ## Extract the captured metrics from _source->prometheus->metrics
+      captured_metrics = hit['_source']['prometheus']['metrics']
+      sort_key_value = hit['_source'][str(sort_key)] ## Time stamp in the hit
+      test_sort_key_list.append(sort_key_value)
+      for key in captured_metrics:
+        if key not in test_metrics:
+          test_metrics[key] = []
+        test_metrics[key].append(captured_metrics[key])
+
 
     for metric_key in metrics:
       print ("computing outliers for " + metric_key)
@@ -126,6 +152,6 @@ if __name__ == '__main__':
         raise "time stamps collected != metric sample list"
 
       print ("Test samples:"+str(test_samples)) 
-      compute_outliers(metrics, metric_key, test_samples, sort_key_list, es)
+      compute_outliers(metrics, test_metrics,  metric_key, test_samples, sort_key_list, es)
 
 
