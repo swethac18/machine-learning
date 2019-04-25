@@ -20,9 +20,11 @@ import logging
 ## arg 2 : the field using which the documents are sorted in the response from Elastic Search. In this example : @timestamp
 ## arg 3 : number of test samples (the last n samples on which anomaly detection should be run) In this example it is 2
 ## arg 4 : name of the index in which the predictions are stored
+
 def search(es_object, index_name, document,search):
     res = es_object.search(index=index_name,  body=search)
     return res
+
 def populateIndexes(es, index_name, docType):
   jsonstr= '{ "@timestamp":"2019-03-01T08:05:34.853Z", "event":{ "dataset":"prometheus.collector", "duration":115000, "module":"prometheus" }, "metricset":{ "name":"collector" }, "prometheus":{ "labels":{ "listener_name":"http" }, "metrics":{ "net_conntrack_listener_conn_accepted_total":3, "net_conntrack_listener_conn_closed_total":0 } }, "service":{ "address":"127.0.0.1:55555", "type":"prometheus" } }'
   i = 0
@@ -61,12 +63,10 @@ def connect_elasticsearch():
     else:
         print('Could not connect to Elastic Search')
     return _es
+
 def compute_outliers(metrics, test_metrics,  metric_key, sort_key_list, es):
   train = metrics[metric_key]# [:-test_samples]
   test = test_metrics[metric_key]#[-test_samples:]
-#print ("length of train:" + str(len(train))) 
-# print ("length of metrics:" + str(len(metrics[metric_key]))) 
-# print ("length of test:" + str(len(test))) 
   test_time_stamps = sort_key_list
   
   X_train = pd.DataFrame(train, columns = ['sample'])
@@ -81,35 +81,42 @@ def compute_outliers(metrics, test_metrics,  metric_key, sort_key_list, es):
     jsonString = '{"' + sort_key + '": "'+ test_time_stamps[i] + '", "metrics":"' + metric_key + '", "value":' + str(test[i]) + ',"outlier":' + str(outliers[i]) +'}'
     es.index(index=anomalies_index, doc_type='predicted', body=json.loads(jsonString))
 
+def connect_to_remote_elasticsearch():
+
+  es = elasticsearch.Elasticsearch(['https://'+ os.environ['HOSTNAME'] +':' + os.environ['PORT']+ '/'], http_auth=(os.environ['USER'], os.environ['PASSWORD']),use_ssl=True, ca_certs=certifi.where())
+  if es.ping():
+    return es
+  else:
+    raise "Unable to connect to Elastic Search"
+
+  return es
 if __name__ == '__main__':
   #es = connect_elasticsearch()
-  es = elasticsearch.Elasticsearch(['https://'+ os.environ['HOSTNAME'] +':' + os.environ['PORT']+ '/'], http_auth=(os.environ['USER'], os.environ['PASSWORD']),use_ssl=True, ca_certs=certifi.where())
-#if es.ping():
-#   print ("Successfully connected to Elastic Search")
-#   populateIndexes(es, 'metrics', '')
+  es = connect_to_remote_elasticsearch()
+  # populateIndexes(es, 'metrics', '') -- used for populating index with simulated values
   logging.basicConfig(level=logging.ERROR)
 
-  index_name = os.environ['index'] # sys.argv[1] ## name of the index from which the metric documents are read
+  index_name = os.environ['index'] # ## name of the index from which the metric documents are read
   ## we issue a query to index to retrieve documents from the index sorted by this sortkey (ex: @timeStamp)
-  sort_key = '@timestamp' #sys.argv[2] ## sorty key could be time stamp name of the field in which the response should be sorted
-  ## metrics that we need to analyze for isolation forest
-#test_samples = int(sys.argv[3]) 
+  sort_key = '@timestamp' # documents returned from elastic search will be sorted by this key 
+  
+## Starting and end time stamps for training data for training anomaly detector 
   training_start_timestamp = os.environ['train_start_time']
   training_end_timestamp = os.environ['train_end_time']
 
+## Starting and end time stamps for the test data on which anaomaly detection is run
   test_start_time_stamp = os.environ['test_start_time']
   test_end_time_stamp = os.environ['test_end_time']
-###
 
-  ## number of samples on which we need to test for anomaly. Rest of the samples will be used for training
+## Index in which the predicted results of outlier (-1) or not-outlier (1) is stored
   anomalies_index = os.environ['results_index'] #sys.argv[4]
   sort_key = sort_key.replace('--','').strip()
   
   if es is not None:
- 
-    #search_object = '{"sort" : [{"' + str(sort_key) + '" : {"order" : "asc"}}],"from" : 0, "size" : 10000}'
-    search_object = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + training_start_timestamp + '", "lte": "'+ training_end_timestamp + '" } }}}'
-    response= es.search(index=str(index_name),body=search_object)
+    ## This search query retrieves all documents between start_time and end_timestamp for training data
+    ## the retrieved results are sorted by timestamp
+    search_query = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + training_start_timestamp + '", "lte": "'+ training_end_timestamp + '" } }}}'
+    response= es.search(index=str(index_name),body=search_query)
     metrics = {}
     sort_key_list = []
 
@@ -126,8 +133,8 @@ if __name__ == '__main__':
           metrics[key] = []
         metrics[key].append(captured_metrics[key])
     
-    search_object = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + test_start_time_stamp + '", "lte": "'+ test_end_time_stamp + '" } }}}'
-    test_response= es.search(index=str(index_name),body=search_object)
+    search_query = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + test_start_time_stamp + '", "lte": "'+ test_end_time_stamp + '" } }}}'
+    test_response= es.search(index=str(index_name),body=search_query)
     test_metrics = {}
     test_sort_key_list = []
 
