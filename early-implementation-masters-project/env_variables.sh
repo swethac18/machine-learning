@@ -10,3 +10,6 @@ export test_start_timestamp=2019-03-03T00:01:34.853Z
 export results_index=anomaly
 export HOSTNAME=e88c64e7d90e4ecaba68d3830ac8ba85.us-central1.gcp.cloud.es.io
 export PORT=9243
+export NEXT_N_PREDICT=10
+export NEXT_N_PREDICT_INDEX=anomaly
+
