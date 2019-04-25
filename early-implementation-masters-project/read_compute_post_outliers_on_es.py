@@ -11,16 +11,7 @@ import os
 import logging
 ## Requirements
 ## run elastic search at localhost:9200
-## sample command
-## python3.6 read_compute_post_outliers_on_es.py metrics --@timestamp 2 anomaly
-
-## python3.6 read_compute_post_outliers_on_es.py <name of _index from which metrics are read> <sort_key>  <test_observation>  <results_stored_in_index>
-## python version 3.6 and above
-## arg 1 : name of the index on elastic search that contains documents. In this example:  metrics
-## arg 2 : the field using which the documents are sorted in the response from Elastic Search. In this example : @timestamp
-## arg 3 : number of test samples (the last n samples on which anomaly detection should be run) In this example it is 2
-## arg 4 : name of the index in which the predictions are stored
-
+## update the environment variables as mentioned in env_variables.sh
 def search(es_object, index_name, document,search):
     res = es_object.search(index=index_name,  body=search)
     return res
