@@ -145,17 +145,17 @@ def main_fn():
   sort_key = '@timestamp' # documents returned from elastic search will be sorted by this key 
   
 ## Starting and end time stamps for training data for training anomaly detector 
-
-  (training_start_timestamp, training_end_timestamp, test_start_time_stamp, test_end_time_stamp )= compute_timestamps(os.environ['duration']) 
-  training_start_timestamp = os.environ['train_start_time']
-  training_end_timestamp = os.environ['train_end_time']
-
 ## Starting and end time stamps for the test data on which anaomaly detection is run
-  test_start_time_stamp = os.environ['test_start_time']
-  test_end_time_stamp = os.environ['test_end_time']
+## These time stamps are computed based on duration
+  (training_start_timestamp, training_end_timestamp, test_start_time_stamp, test_end_time_stamp )= compute_timestamps(os.environ['duration']) 
+#  training_start_timestamp = os.environ['train_start_time']
+#  training_end_timestamp = os.environ['train_end_time']
+
+#  test_start_time_stamp = os.environ['test_start_time']
+#  test_end_time_stamp = os.environ['test_end_time']
 
 ## Index in which the predicted results of outlier (-1) or not-outlier (1) is stored
-  anomalies_index = os.environ['results_index'] #sys.argv[4]
+#  anomalies_index = os.environ['results_index'] #sys.argv[4]
   sort_key = sort_key.replace('--','').strip()
   
   if es is not None:
@@ -190,27 +190,6 @@ def main_fn():
     ## extract the hits
     testing_hits = response["hits"]["hits"]
     compute_outliers_allmetrics(training_hits, testing_hits, es)
-    input("end")
-    allhits = test_response["hits"]["hits"]
-    for hit in allhits: #response["hits"]["hits"]:
-      ## Extract the captured metrics from _source->prometheus->metrics
-      captured_metrics = hit['_source']['prometheus']['metrics']
-      sort_key_value = hit['_source'][str(sort_key)] ## Time stamp in the hit
-      test_sort_key_list.append(sort_key_value)
-      for key in captured_metrics:
-        if key not in test_metrics:
-          test_metrics[key] = []
-        test_metrics[key].append(captured_metrics[key])
-
-
-    for metric_key in metrics:
-      print ("computing outliers for " + metric_key)
-      print (len(metrics[metric_key]))
-      if (len(metrics[metric_key]) != len(sort_key_list)):
-        raise "time stamps collected != metric sample list"
-
-
-      compute_outliers(metrics, test_metrics,  metric_key, test_sort_key_list, es)
-
+    
 if __name__ == "__main__":
     main_fn()
