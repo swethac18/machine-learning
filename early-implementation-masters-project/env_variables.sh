@@ -12,4 +12,5 @@ export HOSTNAME=e88c64e7d90e4ecaba68d3830ac8ba85.us-central1.gcp.cloud.es.io
 export PORT=9243
 export NEXT_N_PREDICT=10
 export NEXT_N_PREDICT_INDEX=anomaly
-
+export  NEXT_N_PREDICT_INDEX=nextnpredictions
+export duration=1
