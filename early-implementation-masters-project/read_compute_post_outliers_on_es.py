@@ -98,7 +98,43 @@ def connect_to_remote_elasticsearch():
     raise "Unable to connect to Elastic Search"
 
   return es
-if __name__ == '__main__':
+
+def compute_outliers_allmetrics(training_hits, testing_hits, es):
+
+  training_metrics = {}
+  testing_metrics = {}
+  for hit in training_hits:
+    captured_metrics = hit['_source']['prometheus']['metrics']
+    for key in captured_metrics:
+      if (key not in training_metrics):
+        training_metrics[key] = []
+      training_metrics[key].append(captured_metrics[key])
+
+  for hit in testing_hits:
+    captured_metrics = hit['_source']['prometheus']['metrics']
+    for key in captured_metrics:
+      if (key not in testing_metrics):
+        testing_metrics[key] = []
+      testing_metrics[key].append(captured_metrics[key])
+
+  for key in training_metrics:
+    X_train = pd.DataFrame(training_metrics[key], columns=['sample'])
+    clf = IsolationForest(max_samples=1000)
+    
+    X_test = pd.DataFrame(testing_metrics[key], columns=['sample'])
+    clf.fit(X_train)
+    outliers = clf.predict(X_test)
+
+    i = 0
+    input("model prediction computed")
+    for hit in testing_hits:
+      input(outliers[i])
+      input(hit)
+      es.update(index=hit['_index'],doc_type=hit['_type'],id=hit['_id'],body='{"doc":{"outlier":{"' + key +'":' + str(outliers[i]) + '}}}') 
+      i+=1
+
+def main_fn():
+  
   #es = connect_elasticsearch()
   es = connect_to_remote_elasticsearch()
   # populateIndexes(es, 'metrics', '') -- used for populating index with simulated values
@@ -111,12 +147,12 @@ if __name__ == '__main__':
 ## Starting and end time stamps for training data for training anomaly detector 
 
   (training_start_timestamp, training_end_timestamp, test_start_time_stamp, test_end_time_stamp )= compute_timestamps(os.environ['duration']) 
-# training_start_timestamp = os.environ['train_start_time']
-#  training_end_timestamp = os.environ['train_end_time']
+  training_start_timestamp = os.environ['train_start_time']
+  training_end_timestamp = os.environ['train_end_time']
 
 ## Starting and end time stamps for the test data on which anaomaly detection is run
-#  test_start_time_stamp = os.environ['test_start_time']
-#  test_end_time_stamp = os.environ['test_end_time']
+  test_start_time_stamp = os.environ['test_start_time']
+  test_end_time_stamp = os.environ['test_end_time']
 
 ## Index in which the predicted results of outlier (-1) or not-outlier (1) is stored
   anomalies_index = os.environ['results_index'] #sys.argv[4]
@@ -132,9 +168,11 @@ if __name__ == '__main__':
 
     ## The response contains a field called hits which in turn has another field called hits
     ## extract the hits
+    training_hits = response["hits"]["hits"]
     allhits = response["hits"]["hits"]
     for hit in allhits: #response["hits"]["hits"]:
       ## Extract the captured metrics from _source->prometheus->metrics
+
       captured_metrics = hit['_source']['prometheus']['metrics']
       sort_key_value = hit['_source'][str(sort_key)] ## Time stamp in the hit
       sort_key_list.append(sort_key_value)
@@ -150,6 +188,9 @@ if __name__ == '__main__':
 
     ## The response contains a field called hits which in turn has another field called hits
     ## extract the hits
+    testing_hits = response["hits"]["hits"]
+    compute_outliers_allmetrics(training_hits, testing_hits, es)
+    input("end")
     allhits = test_response["hits"]["hits"]
     for hit in allhits: #response["hits"]["hits"]:
       ## Extract the captured metrics from _source->prometheus->metrics
@@ -168,6 +209,8 @@ if __name__ == '__main__':
       if (len(metrics[metric_key]) != len(sort_key_list)):
         raise "time stamps collected != metric sample list"
 
+
       compute_outliers(metrics, test_metrics,  metric_key, test_sort_key_list, es)
 
-
+if __name__ == "__main__":
+    main_fn()
