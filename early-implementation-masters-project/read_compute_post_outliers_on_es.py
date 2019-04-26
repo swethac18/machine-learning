@@ -33,36 +33,6 @@ def compute_timestamps(duration):
 
   return (train_start_iso, train_end_iso, test_start_iso, test_end_iso)
 
-def populateIndexes(es, index_name, docType):
-  jsonstr= '{ "@timestamp":"2019-03-01T08:05:34.853Z", "event":{ "dataset":"prometheus.collector", "duration":115000, "module":"prometheus" }, "metricset":{ "name":"collector" }, "prometheus":{ "labels":{ "listener_name":"http" }, "metrics":{ "net_conntrack_listener_conn_accepted_total":3, "net_conntrack_listener_conn_closed_total":0 } }, "service":{ "address":"127.0.0.1:55555", "type":"prometheus" } }'
-  i = 0
-  counter = 0
-  for i in range(0,60):
-    for j in range(0,24):
-      for k in range(1,15):
-        to_replace = "2019-03-01T08:05:34.853Z"
-        kstr = str(k)
-        if (k < 10):
-          kstr = "0" + kstr#+ str(k)
-        istr = str(i)
-        if (i < 10):
-          istr = "0" + istr
-        jstr = str(j)
-        if (j < 10):
-          jstr = "0" + jstr
-
-        replace_with = "2019-03-"+kstr+"T" + jstr+ ":"+ istr+":34.853Z"
-        targetTimeStamp = jsonstr.replace(to_replace, replace_with)
-        to_replace_metric = '"net_conntrack_listener_conn_accepted_total":3'
-        conn = math.sin(counter)*10 + 20
-        counter+=1
-        if (conn < 0):
-          conn *= -1
-        conn = int(conn)
-        replace_metric_with = '"net_conntrack_listener_conn_accepted_total":' + str(conn)
-        targetJson = targetTimeStamp.replace(to_replace_metric, replace_metric_with)
-        es.index(index=index_name, doc_type="metric", body=json.loads(targetJson))
-
 def connect_elasticsearch():
     _es = None
     _es = Elasticsearch([{'host': 'localhost', 'port': 9200}])
@@ -135,11 +105,8 @@ def compute_outliers_allmetrics(training_hits, testing_hits, es):
 
 def main_fn():
   
-  #es = connect_elasticsearch()
   es = connect_to_remote_elasticsearch()
-  # populateIndexes(es, 'metrics', '') -- used for populating index with simulated values
   logging.basicConfig(level=logging.ERROR)
-
   index_name = os.environ['index'] # ## name of the index from which the metric documents are read
   ## we issue a query to index to retrieve documents from the index sorted by this sortkey (ex: @timeStamp)
   sort_key = '@timestamp' # documents returned from elastic search will be sorted by this key 
@@ -169,23 +136,6 @@ def main_fn():
     ## The response contains a field called hits which in turn has another field called hits
     ## extract the hits
     training_hits = response["hits"]["hits"]
-    allhits = response["hits"]["hits"]
-    for hit in allhits: #response["hits"]["hits"]:
-      ## Extract the captured metrics from _source->prometheus->metrics
-
-      captured_metrics = hit['_source']['prometheus']['metrics']
-      sort_key_value = hit['_source'][str(sort_key)] ## Time stamp in the hit
-      sort_key_list.append(sort_key_value)
-      for key in captured_metrics:
-        if key not in metrics:
-          metrics[key] = []
-        metrics[key].append(captured_metrics[key])
-    
-    search_query = '{"sort" : [{"@timestamp" : {"order" : "asc"}}],"from" : 0, "size" : 10000, "query" : {"range" : { "@timestamp" : { "gte": "' + test_start_time_stamp + '", "lte": "'+ test_end_time_stamp + '" } }}}'
-    test_response= es.search(index=str(index_name),body=search_query)
-    test_metrics = {}
-    test_sort_key_list = []
-
     ## The response contains a field called hits which in turn has another field called hits
     ## extract the hits
     testing_hits = response["hits"]["hits"]
