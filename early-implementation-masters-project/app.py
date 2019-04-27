@@ -181,7 +181,8 @@ def compute_outliers_Version3(training_hits, testing_hits, es):
   for key in training_metrics:
     X_train = pd.DataFrame(training_metrics[key], columns=['sample'])
     clf = IsolationForest(max_samples=1000)
-
+    if (key not in testing_metrics):
+      continue
     X_test = pd.DataFrame(testing_metrics[key], columns=['sample'])
     clf.fit(X_train)
     outliers = clf.predict(X_test)
@@ -280,9 +281,11 @@ def main_fn():
     duration = int(os.environ['DURATION_IN_MINS'])
     GTE = 'now-' + str(2*duration+1) + 'm'
     LTE = 'now-' + str(duration+1) + 'm'
-    search_query = '{"sort":[{"@timestamp":{"order":"asc"}}],"from":0,"size":10000,"query":{"bool":{"must":{"exists":{"field":"prometheus"}},"filter":{"range":{"@timestamp":{"gte":"'+GTE +'","lte":"'+ LTE+ '"}}}}}}'
-    print(search_query)
+    search_query = '{"sort":[{"@timestamp":{"order":"asc"}}],"from":0,"size":1000,"query":{"bool":{"must":{"exists":{"field":"prometheus"}},"filter":{"range":{"@timestamp":{"gte":"'+GTE +'","lte":"'+ LTE+ '"}}}}}}'
+    print("Search Query for training:" + search_query)
     response= es.search(index=str(index_name),body=search_query)
+    print ("Length of response:" + str(len(response)))
+    print (response)
     metrics = {}
     sort_key_list = []
 
@@ -294,12 +297,17 @@ def main_fn():
     GTE = 'now-' + str(duration) + 'm'
     LTE = 'now'
 
-    search_query = '{"sort":[{"@timestamp":{"order":"asc"}}],"from":0,"size":10000,"query":{"bool":{"must":{"exists":{"field":"prometheus"}},"filter":{"range":{"@timestamp":{"gte":"'+GTE +'","lte":"'+ LTE+ '"}}}}}}'
+    search_query = '{"sort":[{"@timestamp":{"order":"asc"}}],"from":0,"size":1000,"query":{"bool":{"must":{"exists":{"field":"prometheus"}},"filter":{"range":{"@timestamp":{"gte":"'+GTE +'","lte":"'+ LTE+ '"}}}}}}'
+    print("Search Query for testing:" + search_query)
     response= es.search(index=str(index_name),body=search_query)
     testing_hits = response["hits"]["hits"]
-
+    print ("Length of response:" + str(len(response)))
+    print (response)
     testing_hits = response["hits"]["hits"]
     compute_outliers_Version3(training_hits, testing_hits, es)
     
 if __name__ == "__main__":
-    main_fn()
+  for key in os.environ:
+    print (key + ":" + os.environ[key])
+  
+  main_fn()
