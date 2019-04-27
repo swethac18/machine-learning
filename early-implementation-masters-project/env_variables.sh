@@ -1,6 +1,6 @@
 export test_end_time=2019-03-05T00:01:34.853Z
-export USER=elastic
-export PASSWORD=5qOa6DEOxDHepgGUSYvM3zpT
+export USER=wq
+export PASSWORD=asas
 export index=metrics
 export result_index=anomaly
 export train_start_time=2019-03-01T00:00:34.853Z
