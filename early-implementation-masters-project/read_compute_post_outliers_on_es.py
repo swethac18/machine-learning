@@ -74,6 +74,13 @@ def compute_outliers_allmetrics(training_hits, testing_hits, es):
   training_metrics = {}
   testing_metrics = {}
   for hit in training_hits:
+    
+    if ('prometheus' not in hit['_source']):
+      continue
+    
+    if ('metrics' not in hit['_source']['prometheus']):
+      continue
+
     captured_metrics = hit['_source']['prometheus']['metrics']
     for key in captured_metrics:
       if (key not in training_metrics):
@@ -81,6 +88,14 @@ def compute_outliers_allmetrics(training_hits, testing_hits, es):
       training_metrics[key].append(captured_metrics[key])
 
   for hit in testing_hits:
+    
+    if ('prometheus' not in hit['_source']):
+      continue
+    
+    if ('metrics' not in hit['_source']['prometheus']):
+      continue
+
+
     captured_metrics = hit['_source']['prometheus']['metrics']
     for key in captured_metrics:
       if (key not in testing_metrics):
@@ -96,10 +111,7 @@ def compute_outliers_allmetrics(training_hits, testing_hits, es):
     outliers = clf.predict(X_test)
 
     i = 0
-    input("model prediction computed")
     for hit in testing_hits:
-      input(outliers[i])
-      input(hit)
       es.update(index=hit['_index'],doc_type=hit['_type'],id=hit['_id'],body='{"doc":{"outlier":{"' + key +'":' + str(outliers[i]) + '}}}') 
       i+=1
 
